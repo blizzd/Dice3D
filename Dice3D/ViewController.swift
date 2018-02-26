@@ -12,55 +12,31 @@ import ARKit
 
 class ViewController: UIViewController, ARSCNViewDelegate {
 
+    var diceArray = [SCNNode]()
+    
     @IBOutlet var sceneView: ARSCNView!
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        // Set the view's delegate
         sceneView.delegate = self
-        
-        // Show statistics such as fps and timing information
-        sceneView.showsStatistics = true
-        
-       // let cube = SCNBox(width: 0.1, height: 0.1, length: 0.1, chamferRadius: 0.01)
-        
-        let sphere = SCNSphere(radius: 0.2)
-        
-        let material = SCNMaterial()
-        
-        material.diffuse.contents = UIImage(named: "art.scnassets/moon.jpg")
-        
-        sphere.materials.append(material)
-        
-        let node = SCNNode()
-        
-        node.position = SCNVector3(x: 0, y: 1.0, z: -1.0)
-        
-        node.geometry = sphere
-        
-        // Create a new scene
-       // let scene = SCNScene(named: "art.scnassets/ship.scn")!
-        
-        // Set the scene to the view
-       // sceneView.scene = scene
-        
-        // Add the red cube
-        sceneView.scene.rootNode.addChildNode(node)
-        
-        sceneView.automaticallyUpdatesLighting = true
+        sceneView.autoenablesDefaultLighting = true
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         
-        // Create a session configuration
-        let configuration = ARWorldTrackingConfiguration()
-        
         print("AR Session is supported = \(AROrientationTrackingConfiguration.isSupported)")
         print("AR World Tracking is supported = \(ARWorldTrackingConfiguration.isSupported)")
         print("AR Face Tracking is supported = \(ARFaceTrackingConfiguration.isSupported)")
+        
+        // Create a session configuration
+        let configuration = ARWorldTrackingConfiguration()
 
+        configuration.planeDetection = .horizontal
+        
+        self.sceneView.debugOptions = [ARSCNDebugOptions.showFeaturePoints]
+        
         // Run the view's session
         sceneView.session.run(configuration)
     }
@@ -70,6 +46,136 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         
         // Pause the view's session
         sceneView.session.pause()
+    }
+    
+    //MARK: - Detect touching by the user and add a dice
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let touch = touches.first {
+            let touchLocation = touch.location(in: sceneView)
+            
+            let results = sceneView.hitTest(touchLocation, types: .existingPlaneUsingExtent)
+            
+            if let hitResult = results.first {
+                
+                self.sceneView.debugOptions = []
+                
+                addDice(atLocation: hitResult)
+                    
+            } else {
+                print("3D Model not found")
+            }
+            
+            
+        }
+    }
+    
+    func addDice(atLocation location: ARHitTestResult) {
+        // Create a new scene
+        let diceScene = SCNScene(named: "art.scnassets/diceCollada.scn")!
+        
+        if let diceNode = diceScene.rootNode.childNode(withName: "Dice", recursively: true) {
+            
+            diceNode.position = SCNVector3(
+                x: location.worldTransform.columns.3.x,
+                y: location.worldTransform.columns.3.y + diceNode.boundingSphere.radius,
+                z: location.worldTransform.columns.3.z
+            )
+            
+            diceArray.append(diceNode)
+            
+            // Set the scene to the view
+            sceneView.scene.rootNode.addChildNode(diceNode)
+            
+            roll(theDice: diceNode)
+        }
+        
+    }
+    
+    //MARK: - Rolling animation
+    func roll(theDice dice: SCNNode) {
+        let randomX = Float(arc4random_uniform(4) + 1) * (Float.pi/2)
+        
+        let randomZ = Float(arc4random_uniform(4) + 1) * (Float.pi/2)
+        
+        let randomY = Float(arc4random_uniform(4) + 1) * (Float.pi/2)
+        
+        let ROTATING_AMOUNT : Float = 5.0
+        
+        dice.runAction(
+            SCNAction.rotateBy(x: CGFloat(randomX * ROTATING_AMOUNT),
+                               y: CGFloat(randomY * ROTATING_AMOUNT),
+                               z: CGFloat(randomZ * ROTATING_AMOUNT),
+                               duration: 0.5)
+        )
+    }
+    
+    func rollAll() {
+        
+        if !diceArray.isEmpty {
+            
+            for dice in diceArray {
+                roll(theDice: dice)
+            }
+            
+        }
+        
+    }
+    
+    //MARK: - Button actions
+    
+    @IBAction func rollAgain(_ sender: UIBarButtonItem) {
+        rollAll()
+    }
+    
+    @IBAction func clearDice(_ sender: UIBarButtonItem) {
+        
+        if !diceArray.isEmpty {
+            diceArray.forEach({ (dice) in
+                dice.removeFromParentNode()
+            })
+        }
+        
+    }
+    
+    //MARK: - Shaking detection
+    
+    override func motionEnded(_ motion: UIEventSubtype, with event: UIEvent?) {
+        rollAll()
+    }
+    
+    //MARK: - ARSCNViewDelegateMethods
+    
+    func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
+        guard let planeAnchor = anchor as? ARPlaneAnchor else {return}
+        
+        let planeNode = createPlane(withPlaneAnchor: planeAnchor)
+            
+        node.addChildNode(planeNode)
+            
+    }
+    
+    //MARK: - Plane rendering methods
+    
+    func createPlane(withPlaneAnchor planeAnchor: ARPlaneAnchor) -> SCNNode {
+        
+        
+        let plane = SCNPlane(width: CGFloat(planeAnchor.extent.x),
+                             height: CGFloat(planeAnchor.extent.z))
+        
+        let planeNode = SCNNode()
+        
+        planeNode.position = SCNVector3(x: planeAnchor.center.x, y: 0, z: planeAnchor.center.z)
+        
+        planeNode.transform = SCNMatrix4MakeRotation(-Float.pi/2, 1, 0, 0)
+        
+        let gridMaterial = SCNMaterial()
+        gridMaterial.diffuse.contents = UIImage(named: "art.scnassets/grid.png")
+        
+        plane.materials.append(gridMaterial)
+        
+        planeNode.geometry = plane
+        
+        return planeNode
     }
     
     
