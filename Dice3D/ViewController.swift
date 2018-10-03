@@ -35,7 +35,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
 
         configuration.planeDetection = .horizontal
         
-        self.sceneView.debugOptions = [ARSCNDebugOptions.showFeaturePoints]
+        self.sceneView.debugOptions = [SCNDebugOptions.showFeaturePoints]
         
         // Run the view's session
         sceneView.session.run(configuration)
@@ -139,7 +139,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     //MARK: - Shaking detection
     
-    override func motionEnded(_ motion: UIEventSubtype, with event: UIEvent?) {
+    override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
         rollAll()
     }
     
